@@ -28,46 +28,64 @@ function rewriteBody(body, toHost) {
   let result = body;
   let totalReplaced = 0;
 
+  function rewriteLinkUrl(url, aliasEscaped) {
+    return url
+      // Preserve original scheme (http or https) when rewriting hostname.
+      .replace(
+        new RegExp(`^(https?:)//${aliasEscaped}(?=:\\d+|[/?#]|$)`, "i"),
+        `$1//${toHost}`
+      )
+      .replace(
+        new RegExp(`^//${aliasEscaped}(?=:\\d+|[/?#]|$)`, "i"),
+        `//${toHost}`
+      );
+  }
+
   for (const alias of NAS_HOSTNAMES) {
     if (alias === toHost) continue;
 
     const esc = escapeRegex(alias);
     let count = 0;
 
-    // Pattern 1: href, src, action with http/https/protocol-relative URLs (both quotes)
-    // Uses word boundary check to avoid matching partial hostnames (e.g., 'nas' in 'nas-docker')
-    const p1 = new RegExp(`((?:href|src|action)\\s*=\\s*)(["'])([^"']*?(?:https?:|//)${esc}(?=:\\d+|/|$|["']))([^"]*)\\2`, "gi");
-    result = result.replace(p1, (match, attr, quote, url, rest) => {
-      const rewritten = url
-        .replace(new RegExp(`https?://${esc}(?=:\\d+|/|$|["'])`, "gi"), `http://${toHost}`)
-        .replace(new RegExp(`^//${esc}(?=:\\d+|/|$|["'])`, "gi"), `//${toHost}`);
+    // Pattern 1: HTML attributes with navigable URLs.
+    const p1 = new RegExp(
+      `((?:href|src|action)\\s*=\\s*)(["'])([^"']*?(?:https?://|//)${esc}(?=:\\d+|[/?#]|$)[^"']*)\\2`,
+      "gi"
+    );
+    result = result.replace(p1, (match, attr, quote, url) => {
+      const rewritten = rewriteLinkUrl(url, esc);
       if (rewritten !== url) {
         count++;
       }
-      return `${attr}${quote}${rewritten}${rest}${quote}`;
+      return `${attr}${quote}${rewritten}${quote}`;
     });
 
-    // Pattern 2: JSON-style with "key": "http://nas:5055" or 'key': 'http://nas:5055'
-    // Uses lookahead to ensure hostname ends properly
-    const p2 = new RegExp(`(["'](?:href|url|link|redirect)["']\\s*:\\s*)(["'])([^"']*?(?:https?:|//)${esc}(?=:\\d+|/|$|["']))([^"]*)\\2`, "gi");
-    result = result.replace(p2, (match, key, quote, url, rest) => {
-      const rewritten = url
-        .replace(new RegExp(`https?://${esc}(?=:\\d+|/|$|["'])`, "gi"), `http://${toHost}`)
-        .replace(new RegExp(`^//${esc}(?=:\\d+|/|$|["'])`, "gi"), `//${toHost}`);
+    // Pattern 2: JSON-style link fields in payloads.
+    const p2 = new RegExp(
+      `(["'](?:href|url|link|redirect)["']\\s*:\\s*)(["'])([^"']*?(?:https?://|//)${esc}(?=:\\d+|[/?#]|$)[^"']*)\\2`,
+      "gi"
+    );
+    result = result.replace(p2, (match, key, quote, url) => {
+      const rewritten = rewriteLinkUrl(url, esc);
       if (rewritten !== url) {
         count++;
       }
-      return `${key}${quote}${rewritten}${rest}${quote}`;
+      return `${key}${quote}${rewritten}${quote}`;
     });
 
-    // Pattern 3: Fallback for any hostname:port in attribute values  
+    // Pattern 3: Fallback for host-only references in attributes.
     const p3 = new RegExp(`((?:href|src|action)\\s*=\\s*)(["'])([^"']*${esc}(?::\\d+)?[^"']*)\\2`, "gi");
     result = result.replace(p3, (match, attr, quote, url) => {
-      // Only replace if not already done and hostname ends properly
-      if (url.includes(toHost) || !url.match(new RegExp(`${esc}(?=:\\d+|/|$|["'])`, "i"))) return match;
+      // Only replace full host tokens (avoid alias partial match inside larger hostnames).
+      if (
+        url.includes(toHost) ||
+        !url.match(new RegExp(`(?<![a-z0-9-])${esc}(?=:\\d+|[/?#]|$)`, "i"))
+      ) {
+        return match;
+      }
       
       const rewritten = url
-        .replace(new RegExp(`${esc}(?=:\\d+|/|$|["'])`, "gi"), toHost);
+        .replace(new RegExp(`(?<![a-z0-9-])${esc}(?=:\\d+|[/?#]|$)`, "gi"), toHost);
       if (rewritten !== url) {
         count++;
       }
