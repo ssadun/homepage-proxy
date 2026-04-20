@@ -1,4 +1,4 @@
-FROM node:20-alpine@sha256:6c3d37db51021b2b0c0c8e0e0d0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e
+FROM node:20-alpine
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
