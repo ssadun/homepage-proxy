@@ -2,19 +2,18 @@ services:
   # Drop this into your existing docker-compose.yml alongside your homepage service.
   # Then access Homepage via nas:3080 or nas-docker:3080 as before —
   # the proxy sits in front and rewrites hostnames transparently.
-  homepage-proxy:
-    # image: ghcr.io/youruser/homepage-proxy:latest
+  homepage-proxy:    
     container_name: homepage-proxy
     hostname: homepage-proxy
     environment:
-      TARGET: http://homepage:3080 # internal Docker service name + port of Homepage
+      TARGET: http://homepage:3080            # internal Docker service name + port of Homepage
+      NAS_HOSTNAMES: nas,nas.local,nas-docker,homepage.sadun.synology.me # Host aliases to rewrite in HTML / JSON responses; optional for non-NAS hostname use.
       PORT: 3085
-      # Comma-separated list of ALL hostnames you ever use to reach this box.
-      NAS_HOSTNAMES: nas,nas.local,nas-docker
-    network_mode: nas                # must share a network with the homepage container
-    restart: unless-stopped
+      VERSION: v1.7
+    volumes:
+      - ../../resolv.conf:/etc/resolv.conf
+    network_mode: nas                         # must share a network with the homepage container
     ports:
-      - 3085:3085                  # replaces homepage's direct port exposure
-    build:
-      context: .
-      dockerfile: dockerfile
+      - 3085:3085                             # replaces homepage's direct port exposure
+    restart: on-failure:5
+    image: ssadun/homepage-proxy:latest
