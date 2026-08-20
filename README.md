@@ -15,7 +15,13 @@ Homepage service links can point to one NAS alias (for example `nas`) while user
 
 The proxy rewrites hostname aliases in:
 - HTML link attributes: `href`, `src`, `action`
-- JSON link-like fields: `href`, `url`, `link`, `redirect`
+- JSON link-like fields: `href`, `link`, `redirect`
+
+`url` and `siteMonitor` fields are deliberately **not** rewritten — Homepage
+fetches those server-side (widget data, monitor pings) using the real
+internal hostname (e.g. `http://nas:3000`). Rewriting them would point the
+backend's own outbound request at the public-facing hostname/port, which is
+usually not routable and breaks widgets.
 
 Only responses with these content types are processed:
 - `text/html`
